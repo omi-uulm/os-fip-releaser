@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# set -x
+
+# Load ignore files
+if [ -f ./projectigxnore ]; then
+    echo "./projectignore projectignore file loaded."
+    PROJECTIGNORE_FILE=./projectignore
+elif [ -f /etc/fip-release/projectignore ]; then
+    echo "/etc/fip-release/projectignore projectignore file loaded."
+    PROJECTIGNORE_FILE=/etc/fip-release/projectignore
+else
+    echo "projectignore file not found. Exiting!"
+    exit 5
+fi
+
+function project_name_from_id() {
+    id=$1
+    echo "$PROJECT_LIST" | jq ".[] | select(.ID == \"$id\") | .Name"
+}
+function ip_from_id() {
+    id=$1
+    echo "$FLOATING_IP_LIST" | jq ".[] | select( .ID == \"$id\") | .[\"Floating IP Address\"]"
+}
+export PROJECT_LIST
+PROJECT_LIST=$(openstack --insecure project list -f json | jq -c .)
+export FLOATING_IP_LIST
+FLOATING_IP_LIST=$(openstack --insecure floating ip list --status DOWN --long -f json | jq -c .)
+
+PROJECT_FILTERED=$PROJECT_LIST
+
+while read -r project || [[ -n "$project" ]]; do
+    echo "filtering out $project"
+    PROJECT_FILTERED=$(echo "$PROJECT_FILTERED" | jq ".[] | select(.Name != \"$project\")" | jq -c -s)
+done <"projectignore"
+
+PROJECT_FILTERED_IDS=$(echo "$PROJECT_FILTERED" | jq -r -c ".[].ID")
+
+while read -r project; do
+    # Filter FIP for current project
+    FLOATING_IP_PROJECT=$(echo "$FLOATING_IP_LIST" | jq ".[] | select(.Project == \"$project\")" | jq -c -s)
+    # Filter descriptions
+    FLOATING_IP_PROJECT=$(echo "$FLOATING_IP_PROJECT" | jq ".[] | select(.Description == \"\")" | jq -c -s)
+    # Select IDs
+    FLOATING_IP_FILTERED_IDS=$(echo "$FLOATING_IP_PROJECT" | jq -r -c ".[].ID")
+    if [ -z "$FLOATING_IP_FILTERED_IDS" ]; then
+        # Skip if no FIP are associated
+        echo "Skipping Project $(project_name_from_id "$project") ($project)"
+        continue
+    fi
+    echo "Processing Project $(project_name_from_id "$project") ($project)"
+    while read -r ip; do
+        # Release FIP
+        if [ -z "$ip" ]; then break; fi
+        echo "$ip $(ip_from_id "$ip")"
+        openstack --insecure floating ip delete "$ip"
+    done <<<"$FLOATING_IP_FILTERED_IDS"
+done <<<"$PROJECT_FILTERED_IDS"
+
+# echo $PROJECT_LIST | jq .
+# echo $FLOATING_IP_LIST | jq .
+echo "Project list length $(echo "$PROJECT_LIST" | jq length)"
+echo "Filtered project list length $(echo "$PROJECT_FILTERED" | jq length)"
