@@ -3,7 +3,7 @@
 # set -x
 
 # Load ignore files
-if [ -f ./projectigxnore ]; then
+if [ -f ./projectignore ]; then
     echo "./projectignore projectignore file loaded."
     PROJECTIGNORE_FILE=./projectignore
 elif [ -f /etc/fip-release/projectignore ]; then
