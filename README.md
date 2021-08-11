@@ -27,4 +27,4 @@ The `projectignore` config file is a simple list with line separated project nam
 
 ## Run
 
-This script can be run locally if `python-openstack` and `jq` is installed. Alternatively use the provided Dockerfile. However, it is advised to run this script within a CI/CD pipeline on a schedule.
+This script can be run locally if `python-openstack` and `jq` (version 1.6) is installed. Alternatively use the provided Dockerfile. However, it is advised to run this script within a CI/CD pipeline on a schedule.
